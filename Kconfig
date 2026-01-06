@@ -56,6 +56,13 @@ menu "Camera configuration"
             Enable this option if you want to use the GC032A.
             Disable this option to save memory.
 
+	config GC0307_SUPPORT
+        bool "Support GC0307 VGA"
+        default y
+        help
+            Enable this option if you want to use the GC0307.
+            Disable this option to save memory.
+			
     config GC0308_SUPPORT
         bool "Support GC0308 VGA"
         default y
@@ -173,7 +180,7 @@ menu "Camera configuration"
     
     choice GC_SENSOR_WINDOW_MODE
         bool "GalaxyCore Sensor Window Mode"
-        depends on (GC2145_SUPPORT || GC032A_SUPPORT || GC0308_SUPPORT)
+        depends on (GC2145_SUPPORT || GC032A_SUPPORT || GC0308_SUPPORT || GC0307_SUPPORT)
         default GC_SENSOR_SUBSAMPLE_MODE
         help
             This option determines how to reduce the output size when the resolution you set is less than the maximum resolution.

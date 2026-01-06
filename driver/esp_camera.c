@@ -51,6 +51,9 @@
 #if CONFIG_GC032A_SUPPORT
 #include "gc032a.h"
 #endif
+#if CONFIG_GC0307_SUPPORT
+#include "gc0307.h"
+#endif
 #if CONFIG_GC0308_SUPPORT
 #include "gc0308.h"
 #endif
@@ -134,6 +137,9 @@ static const sensor_func_t g_sensors[] = {
 #endif
 #if CONFIG_GC032A_SUPPORT
     {esp32_camera_gc032a_detect, esp32_camera_gc032a_init},
+#endif
+#if CONFIG_GC0307_SUPPORT
+    {esp32_camera_gc0307_detect, esp32_camera_gc0307_init},
 #endif
 #if CONFIG_GC0308_SUPPORT
     {esp32_camera_gc0308_detect, esp32_camera_gc0308_init},
