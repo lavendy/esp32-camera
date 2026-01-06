@@ -5,7 +5,7 @@
 
 #define REG_DLY 0xff
 
-static const uint8_t GC0307_sensor_default_regs[][2] = {
+static const uint8_t gc0307_sensor_default_regs[][2] = {
     {0xfe, 0x00},
     {0xec, 0x20},
     {0x05, 0x00},

@@ -18,15 +18,15 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sccb.h"
-#include "GC0307.h"
-#include "GC0307_regs.h"
-#include "GC0307_settings.h"
+#include "gc0307.h"
+#include "gc0307_regs.h"
+#include "gc0307_settings.h"
 
 #if defined(ARDUINO_ARCH_ESP32) && defined(CONFIG_ARDUHAL_ESP_LOG)
 #include "esp32-hal-log.h"
 #else
 #include "esp_log.h"
-static const char *TAG = "GC0307";
+static const char *TAG = "gc0307";
 #endif
 
 #define H8(v) ((v)>>8)
@@ -134,7 +134,7 @@ static int reset(sensor_t *sensor)
     }
 
     vTaskDelay(80 / portTICK_PERIOD_MS);
-    ret = write_regs(sensor->slv_addr, GC0307_sensor_default_regs, sizeof(GC0307_sensor_default_regs)/(sizeof(uint8_t) * 2));
+    ret = write_regs(sensor->slv_addr, gc0307_sensor_default_regs, sizeof(gc0307_sensor_default_regs)/(sizeof(uint8_t) * 2));
     if (ret == 0) {
         ESP_LOGD(TAG, "Camera defaults loaded");
         vTaskDelay(80 / portTICK_PERIOD_MS);
@@ -792,7 +792,7 @@ int esp32_camera_GC0307_detect(int slv_addr, sensor_id_t *id)
     return 0;
 }
 
-int esp32_camera_GC0307_init(sensor_t *sensor)
+int esp32_camera_gc0307_init(sensor_t *sensor)
 {
     sensor->init_status = init_status;
     sensor->reset = reset;

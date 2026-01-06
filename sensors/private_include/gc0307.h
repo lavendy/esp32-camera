@@ -15,7 +15,7 @@ extern "C" {
  *     0:       Can't detect this sensor
  *     Nonzero: This sensor has been detected
  */
-int esp32_camera_GC0307_detect(int slv_addr, sensor_id_t *id);
+int esp32_camera_gc0307_detect(int slv_addr, sensor_id_t *id);
 
 /**
  * @brief initialize sensor function pointers
@@ -24,7 +24,7 @@ int esp32_camera_GC0307_detect(int slv_addr, sensor_id_t *id);
  * @return
  *      Always 0
  */
-int esp32_camera_GC0307_init(sensor_t *sensor);
+int esp32_camera_gc0307_init(sensor_t *sensor);
 
 #ifdef __cplusplus
 }
