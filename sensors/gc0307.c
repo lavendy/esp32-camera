@@ -110,15 +110,12 @@ static void print_regs(uint8_t slv_addr)
         ESP_LOGI(TAG, "reg[0x%02x] = 0x%02x", i, read_reg(slv_addr, i));
     }
     ESP_LOGI(TAG, "\npage 0 ===");
-    write_reg(slv_addr, 0xfe, 0x00); // page 0
-    for (size_t i = 0x03; i <= 0xa2; i++) {
+    write_reg(slv_addr, 0xf0, 0x00); // page 0
+    for (size_t i = 0x00; i <= 0x1f; i++) {
         ESP_LOGI(TAG, "p0 reg[0x%02x] = 0x%02x", i, read_reg(slv_addr, i));
     }
-
-    ESP_LOGI(TAG, "\npage 3 ===");
-    write_reg(slv_addr, 0xfe, 0x03); // page 3
-    for (size_t i = 0x01; i <= 0x43; i++) {
-        ESP_LOGI(TAG, "p3 reg[0x%02x] = 0x%02x", i, read_reg(slv_addr, i));
+	for (size_t i = 0x40; i <= 0x4f; i++) {
+        ESP_LOGI(TAG, "p0 ISP reg[0x%02x] = 0x%02x", i, read_reg(slv_addr, i));
     }
 #endif
 }
@@ -127,20 +124,54 @@ static int reset(sensor_t *sensor)
 {
     int ret = 0;
     // Software Reset: clear all registers and reset them to their default values
-    ret = write_reg(sensor->slv_addr, RESET_RELATED, 0xf0);
+    /*ret = write_reg(sensor->slv_addr, RESET_RELATED, 0xf0);
     if (ret) {
         ESP_LOGE(TAG, "Software Reset FAILED!");
         return ret;
-    }
+    }*/
+	ESP_LOGI(TAG, "GC0307 not supported Software Reset!");
+	ESP_LOGI(TAG, "start re-init process");
 
     vTaskDelay(80 / portTICK_PERIOD_MS);
     ret = write_regs(sensor->slv_addr, gc0307_sensor_default_regs, sizeof(gc0307_sensor_default_regs)/(sizeof(uint8_t) * 2));
     if (ret == 0) {
         ESP_LOGD(TAG, "Camera defaults loaded");
         vTaskDelay(80 / portTICK_PERIOD_MS);
-        ret = write_reg(sensor->slv_addr, 0xfe, 0x00);
+        ret = write_reg(sensor->slv_addr, 0xf0, 0x00);
+		ret |= write_reg(sensor->slv_addr, 0x43, 0x40); //set o_pclk_output enable
+		ret |= write_reg(sensor->slv_addr, 0x44, 0xE1); //output mode, E1 = 1110 0001
+		/*
+		Output mode setting:total data bus width [9:0]
+		[7] reserved
+		[6] output enable, reset value is 0, that
+		is hight-z
+		[5] averaging neighbors croma
+		[4] output o_pclk select
+		[3:0] output bus data type setting
+			0x00: CbYCr Y
+			0x01: CrYCbY
+			0x02: YCbYCr
+			0x03: YCrYCb
+			0x04:reserved
+			0x05:reserved
+			0x06: RGB 565
+			0x07: RGB x555
+			0x08: RGB 555x
+			0x09: RGB x444
+			0x0a: RGB 444x
+			0x0b: BGRG
+			0x0c: RGBG
+			0x0d: GBGR
+			0x0e: GRGB
+			0x11: only Y
+			0x12: only Cb
+			0x13: only Cr
+			0x14: only R
+			0x15: only G
+			0x16: only B
+		*/
 #ifdef CONFIG_IDF_TARGET_ESP32
-        ret |= set_reg_bits(sensor->slv_addr, PCLK_DIV, 4, 0x07, 1);  //frequency division for esp32, ensure pclk <= 15MHz
+        //ret |= set_reg_bits(sensor->slv_addr, PCLK_DIV, 4, 0x07, 1);  //frequency division for esp32, ensure pclk <= 15MHz
 #endif
     }
     return ret;
@@ -150,19 +181,34 @@ static int set_pixformat(sensor_t *sensor, pixformat_t pixformat)
 {
     int ret = 0;
 
+	/*
+	YUV422 YUYV	0xE2	enable + chroma + YCbYCr
+	RGB565	0x46		enable + RGB565
+	GRAYSCALE	0x51	enable + only Y*/
     switch (pixformat) {
-    case PIXFORMAT_RGB565:
-        ret = write_reg(sensor->slv_addr, 0xfe, 0x00);
-        ret |= set_reg_bits(sensor->slv_addr, OUTPUT_FMT, 0, 0x0f, 6);  //RGB565
-        break;
-    case PIXFORMAT_YUV422:
-        ret = write_reg(sensor->slv_addr, 0xfe, 0x00);
-        ret |= set_reg_bits(sensor->slv_addr, OUTPUT_FMT, 0, 0x0f, 2); //yuv422 Y Cb Y Cr
-        break;
-    case PIXFORMAT_GRAYSCALE:
-        ret = write_reg(sensor->slv_addr, 0xfe, 0x00);
-        ret |= write_reg(sensor->slv_addr, OUTPUT_FMT, 0xb1);
-        break;
+	case PIXFORMAT_RGB565:
+		ret = write_reg(sensor->slv_addr, 0xf0, 0x00);   // page 0
+		ret |= write_reg(sensor->slv_addr, OUTPUT_FMT, 0x46);
+		// 0x46 = 0100 0110
+		// bit6 = 1 (enable)
+		// bit5 = 0
+		// bit[3:0] = 0x06 (RGB565)
+		break;
+
+	case PIXFORMAT_YUV422:
+		ret = write_reg(sensor->slv_addr, 0xf0, 0x00);
+		ret |= write_reg(sensor->slv_addr, OUTPUT_FMT, 0xE2);
+		// YUV422 YCbYCr (기존 테이블과 동일)
+		break;
+
+	case PIXFORMAT_GRAYSCALE:
+		ret = write_reg(sensor->slv_addr, 0xf0, 0x00);
+		ret |= write_reg(sensor->slv_addr, OUTPUT_FMT, 0x51);
+		// 0x51 = 0101 0001
+		// bit6 = 1 (enable)
+		// bit5 = 0 (chroma off)
+		// bit[4:0] = 0x11 (only Y)
+		break;
     default:
         ESP_LOGW(TAG, "Unsupported format %u", pixformat);
         ret = -1;
@@ -214,9 +260,9 @@ static int set_framesize(sensor_t *sensor, framesize_t framesize)
     uint16_t win_w = 640;
     uint16_t win_h = 480;
     const struct subsample_cfg *cfg = NULL;
-    /**
-     * Strategy: try to keep the maximum perspective
-     */
+    
+    //Strategy: try to keep the maximum perspective
+     
     for (size_t i = 0; i < sizeof(subsample_cfgs) / sizeof(struct subsample_cfg); i++) {
         cfg = &subsample_cfgs[i];
         if ((win_w * cfg->ratio_numerator / cfg->ratio_denominator >= w) && (win_h * cfg->ratio_numerator / cfg->ratio_denominator >= h)) {
@@ -610,58 +656,61 @@ static int set_reg(sensor_t *sensor, int reg, int mask, int value)
 static int init_status(sensor_t *sensor)
 {
     int ret;
-    ret = write_reg(sensor->slv_addr, 0xfe, 0x00);
+    ret = write_reg(sensor->slv_addr, 0xf0, 0x00);
 
-    // Read contrast from CONTRAST register (0xb3)
+    // Read contrast from CONTRAST register (0xa1)
     // Default is 0x40, map back to level: (reg_val - 0x40) / 0x10
-    ret = read_reg(sensor->slv_addr, CONTRAST);
+    /*ret = read_reg(sensor->slv_addr, CONTRAST);
     if (ret >= 0) {
         int contrast_level = (ret - 0x40) / 0x10;
         sensor->status.contrast = (contrast_level < -2) ? -2 : (contrast_level > 2) ? 2 : contrast_level;
     } else {
         sensor->status.contrast = 0;
-    }
+    }*/
+	sensor->status.contrast = 0;
 
-    // Read saturation from SATURATION_Cb register (0xb1)
-    // Default is 0x40, map back to level: (reg_val - 0x40) / 0x10
-    ret = read_reg(sensor->slv_addr, SATURATION_Cb);
+    // Read saturation from SATURATION_Cb register (0xa2)
+    // Default is 0x48, map back to level: (reg_val - 0x48) / 0x10
+    /*ret = read_reg(sensor->slv_addr, SATURATION_Cb);
     if (ret >= 0) {
-        int saturation_level = (ret - 0x40) / 0x10;
+        int saturation_level = (ret - 0x48) / 0x10;
         sensor->status.saturation = (saturation_level < -2) ? -2 : (saturation_level > 2) ? 2 : saturation_level;
     } else {
         sensor->status.saturation = 0;
-    }
+    }*/
+	sensor->status.saturation = 0;
 
     // Read sharpness from EDGE12_EFFECT register (0x77)
     // GC0307 uses Edge Enhancement registers for sharpness control
     // Linux kernel driver uses 0x38 as default
-    ret = read_reg(sensor->slv_addr, EDGE12_EFFECT);
+    /*ret = read_reg(sensor->slv_addr, EDGE12_EFFECT);
     if (ret >= 0) {
         int sharpness_level = (ret - 0x38) / 0x08;
         sensor->status.sharpness = (sharpness_level < -2) ? -2 : (sharpness_level > 2) ? 2 : sharpness_level;
     } else {
         sensor->status.sharpness = 0;
-    }
+    }*/
+	sensor->status.sharpness = 0;
 
     // Denoise not supported by GC0307
     sensor->status.denoise = 0;
 
     // Read AE level from AEC_TARGET_Y register (P0:0xd3)
     // Same register as brightness, but different step size for level calculation
-    ret = read_reg(sensor->slv_addr, AEC_TARGET_Y);
+    /*ret = read_reg(sensor->slv_addr, AEC_TARGET_Y);
     if (ret >= 0) {
         int ae_level = (ret - 0x48) / 0x08;
         sensor->status.ae_level = (ae_level < -2) ? -2 : (ae_level > 2) ? 2 : ae_level;
     } else {
         sensor->status.ae_level = 0;
-    }
+    }*/
+	sensor->status.ae_level = 0;
 
     // Gainceiling not supported by GC0307
     sensor->status.gainceiling = 0;
 
-    // Read AWB, AGC, AEC status from AAAA_EN register (0x22)
+    // Read AWB, AGC, AEC status from AAAA_EN register (0x41)
     sensor->status.awb = check_reg_mask(sensor->slv_addr, AAAA_EN, AWB_ENABLE);
-    sensor->status.agc = check_reg_mask(sensor->slv_addr, AAAA_EN, AGC_ENABLE);
     sensor->status.aec = check_reg_mask(sensor->slv_addr, AAAA_EN, AEC_ENABLE);
 
     // DCW not supported by GC0307
@@ -686,7 +735,7 @@ static int init_status(sensor_t *sensor)
     sensor->status.quality = 0;
 
     // Read special effect from SPECIAL_EFFECT register (0x23)
-    ret = read_reg(sensor->slv_addr, SPECIAL_EFFECT);
+    /*ret = read_reg(sensor->slv_addr, SPECIAL_EFFECT);
     if (ret >= 0) {
         // Map hardware register value to effect enum
         // Bit[1:0] of SPECIAL_EFFECT register holds the effect mode
@@ -704,10 +753,12 @@ static int init_status(sensor_t *sensor)
         }
     } else {
         sensor->status.special_effect = 0;
-    }
+    }*/
+	sensor->status.special_effect = 0;
 
     // Read white balance mode from AWB registers (0x5a-0x5c)
-    if (sensor->status.awb) {
+	sensor->status.wb_mode = 0; // Auto WB
+    /*if (sensor->status.awb) {
         sensor->status.wb_mode = 0; // Auto WB
     } else {
         // Manual WB - attempt to detect which preset is active by reading gain values
@@ -732,32 +783,34 @@ static int init_status(sensor_t *sensor)
         } else {
             sensor->status.wb_mode = 0; // Read error - default to Auto
         }
-    }
+    }*/
 
     // AWB gain not specifically tracked
     sensor->status.awb_gain = 0;
 
     // Read AGC gain from GLOBAL_GAIN register (0x50)
     // Hardware range is 0-63 (6-bit), map to 0-30 for API compatibility
-    ret = read_reg(sensor->slv_addr, GLOBAL_GAIN);
+    /*ret = read_reg(sensor->slv_addr, GLOBAL_GAIN);
     if (ret >= 0) {
         // Reverse map from hardware (0-63) to API (0-30)
         sensor->status.agc_gain = (ret * 30) / 63;
         if (sensor->status.agc_gain > 30) sensor->status.agc_gain = 30;
     } else {
         sensor->status.agc_gain = 0;
-    }
+    }*/
+	sensor->status.agc_gain = 0;
 
     // Read AEC value from EXPOSURE registers (0x03, 0x04)
     // 12-bit value: high byte (0x03) bits[11:4], low byte (0x04) bits[3:0] in upper nibble
-    int exp_high = read_reg(sensor->slv_addr, EXPOSURE_HIGH);
+    /*int exp_high = read_reg(sensor->slv_addr, EXPOSURE_HIGH);
     int exp_low = read_reg(sensor->slv_addr, EXPOSURE_LOW);
     if (exp_high >= 0 && exp_low >= 0) {
         sensor->status.aec_value = (exp_high << 4) | ((exp_low >> 4) & 0x0F);
         if (sensor->status.aec_value > 1200) sensor->status.aec_value = 1200;
     } else {
         sensor->status.aec_value = 0;
-    }
+    }*/
+	sensor->status.aec_value = 0;
 
     // AEC2 not supported by GC0307
     sensor->status.aec2 = 0;
@@ -780,7 +833,7 @@ static int set_gainceiling_dummy(sensor_t *sensor, gainceiling_t val)
 int esp32_camera_GC0307_detect(int slv_addr, sensor_id_t *id)
 {
     if (GC0307_SCCB_ADDR == slv_addr) {
-        write_reg(slv_addr, 0xfe, 0x00);
+        write_reg(slv_addr, 0xf0, 0x00);
         uint8_t PID = SCCB_Read(slv_addr, 0x00);
         if (GC0307_PID == PID) {
             id->PID = PID;
@@ -796,30 +849,30 @@ int esp32_camera_gc0307_init(sensor_t *sensor)
 {
     sensor->init_status = init_status;
     sensor->reset = reset;
-    sensor->set_pixformat = set_pixformat;
-    sensor->set_framesize = set_framesize;
-    sensor->set_contrast = set_contrast;
+    sensor->set_pixformat = set_dummy;
+    sensor->set_framesize = set_dummy;
+    sensor->set_contrast = set_dummy;
     sensor->set_brightness = set_dummy;
-    sensor->set_saturation = set_saturation;
-    sensor->set_sharpness = set_sharpness;
+    sensor->set_saturation = set_dummy;
+    sensor->set_sharpness = set_dummy;
     sensor->set_denoise = set_dummy;
-    sensor->set_gainceiling = set_gainceiling_dummy;
+    sensor->set_gainceiling = set_dummy;
     sensor->set_quality = set_dummy;
-    sensor->set_colorbar = set_colorbar;
-    sensor->set_whitebal = set_whitebal;
-    sensor->set_gain_ctrl = set_gain_ctrl;
-    sensor->set_exposure_ctrl = set_exposure_ctrl;
+    sensor->set_colorbar = set_dummy;
+    sensor->set_whitebal = set_dummy;
+    sensor->set_gain_ctrl = set_dummy;
+    sensor->set_exposure_ctrl = set_dummy;
     sensor->set_hmirror = set_hmirror;
     sensor->set_vflip = set_vflip;
 
     sensor->set_aec2 = set_dummy;
     sensor->set_awb_gain = set_dummy;
-    sensor->set_agc_gain = set_agc_gain;
-    sensor->set_aec_value = set_aec_value;
+    sensor->set_agc_gain = set_dummy;
+    sensor->set_aec_value = set_dummy;
 
-    sensor->set_special_effect = set_special_effect;
-    sensor->set_wb_mode = set_wb_mode;
-    sensor->set_ae_level = set_ae_level;
+    sensor->set_special_effect = set_dummy;
+    sensor->set_wb_mode = set_dummy;
+    sensor->set_ae_level = set_dummy;
 
     sensor->set_dcw = set_dummy;
     sensor->set_bpc = set_dummy;

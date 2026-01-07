@@ -33,14 +33,13 @@
 #define WIN_WIDTH_L     0x0c    // Window width low byte
 
 // Sensor Control
-#define CISCTL_MODE1    0x14    // Bit[1]: V_flip, Bit[0]: H_mirror
+#define CISCTL_MODE1    0x0f    // Bit[5]: V_flip, Bit[4]: H_mirror
 
 // AAAA_EN - Auto Algorithm Enable (AEC/AGC/AWB/ABB)
-#define AAAA_EN         0x22    // Auto control enable register
+#define AAAA_EN         0x41    // Auto control enable register
                                 // Per Linux kernel driver:
-                                // Bit[0]: AEC enable (1=on, 0=off)
-                                // Bit[1]: AWB enable (1=on, 0=off)
-                                // Bit[2]: AGC enable (1=on, 0=off)
+                                // Bit[3]: AEC enable (1=on, 0=off)
+                                // Bit[2]: AWB enable (1=on, 0=off)
                                 // Note: This was previously incorrectly named AEC_MODE1
 
 // Special Effects and Output Control
@@ -51,7 +50,7 @@
                                 //  10: Grayscale/Color tint mode
 
 // Output Format
-#define OUTPUT_FMT      0x24    // Output format control
+#define OUTPUT_FMT      0x44    // Output format control
                                 // Bit[3:0]: Output format selection
                                 //  0010: YCbYCr (YUV422)
                                 //  0110: RGB565
@@ -82,11 +81,11 @@
 
 // Saturation Control (Page 0)
 // According to datasheet, saturation is controlled via 0xb1 and 0xb2
-#define SATURATION_Cb   0xb1    // Cb saturation gain (default: 0x40)
-#define SATURATION_Cr   0xb2    // Cr saturation gain (default: 0x40)
+#define SATURATION_Cb   0xa2    // Cb saturation gain (default: 0x40)
+#define SATURATION_Cr   0xb3    // Cr saturation gain (default: 0x48)
 
 // Contrast
-#define CONTRAST        0xb3    // Contrast control (default: 0x40)
+#define CONTRAST        0xa1    // Contrast control (default: 0x40)
 
 // AEC Registers - Automatic Exposure Control (Page 0)
 // Per Linux kernel driver: AEC control registers are at 0xd0-0xd3
@@ -118,13 +117,13 @@
  */
 
 // AAAA_EN (0x22) bit masks - Auto Algorithm Enable
-#define AEC_ENABLE      0x01    // Bit 0: AEC enable
-#define AWB_ENABLE      0x02    // Bit 1: AWB enable
-#define AGC_ENABLE      0x04    // Bit 2: AGC enable
+#define AEC_ENABLE      0x08    // Bit 3: AEC enable
+#define AWB_ENABLE      0x04    // Bit 2: AWB enable
+#define AGC_ENABLE      0x04    // Bit -: AGC enable
 
-// CISCTL_MODE1 (0x14) bit masks
-#define HMIRROR_MASK    0x01    // Bit 0: Horizontal mirror
-#define VFLIP_MASK      0x02    // Bit 1: Vertical flip
+// CISCTL_MODE1 (0x0f) bit masks
+#define HMIRROR_MASK    0x08    // Bit 4: Horizontal mirror
+#define VFLIP_MASK      0x10    // Bit 5: Vertical flip
 
 // SPECIAL_EFFECT (0x23) bit masks
 #define EFFECT_NORMAL   0x00    // Normal mode
