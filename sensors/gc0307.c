@@ -830,7 +830,7 @@ static int set_gainceiling_dummy(sensor_t *sensor, gainceiling_t val)
     return -1;
 }
 
-int esp32_camera_GC0307_detect(int slv_addr, sensor_id_t *id)
+int esp32_camera_gc0307_detect(int slv_addr, sensor_id_t *id)
 {
     if (GC0307_SCCB_ADDR == slv_addr) {
         write_reg(slv_addr, 0xf0, 0x00);
