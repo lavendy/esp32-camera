@@ -104,7 +104,7 @@ static int write_regs(uint8_t slv_addr, const uint8_t (*regs)[2], size_t regs_si
 
 static void print_regs(uint8_t slv_addr)
 {
-#ifdef DEBUG_PRINT_REG
+//#ifdef DEBUG_PRINT_REG
     ESP_LOGI(TAG, "REG list look ======================");
     for (size_t i = 0xf0; i <= 0xfe; i++) {
         ESP_LOGI(TAG, "reg[0x%02x] = 0x%02x", i, read_reg(slv_addr, i));
@@ -117,7 +117,7 @@ static void print_regs(uint8_t slv_addr)
 	for (size_t i = 0x40; i <= 0x4f; i++) {
         ESP_LOGI(TAG, "p0 ISP reg[0x%02x] = 0x%02x", i, read_reg(slv_addr, i));
     }
-#endif
+//#endif
 }
 
 static int reset(sensor_t *sensor)
@@ -134,13 +134,37 @@ static int reset(sensor_t *sensor)
 
     vTaskDelay(80 / portTICK_PERIOD_MS);
     ret = write_regs(sensor->slv_addr, gc0307_sensor_default_regs, sizeof(gc0307_sensor_default_regs)/(sizeof(uint8_t) * 2));
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    //ret = write_reg(sensor->slv_addr, 0xf0, 0x00);
+     // ★ 동기 신호 안정화 설정 추가 ★
+    ret |= write_reg(sensor->slv_addr, 0xf0, 0x00);  // page 0
+    //ret |= write_reg(sensor->slv_addr, 0x47, 0x22);  // allow_pclk_vsync
+    //ret |= write_reg(sensor->slv_addr, 0x4d, 0x23);  // sync mode:  hs/vs high valid
+    
+    ret |= write_reg(sensor->slv_addr, 0x47, 0x22);  // allow_pclk_vsync
+    ret |= write_reg(sensor->slv_addr, 0x4d, 0x00);  // sync mode:  hs/vs high valid
+    
+    ret |= write_reg(sensor->slv_addr, 0x48, 0xc7);  // PCLK = MCLK/2
+
+    // ★ 밝기/노출 조정 ★
+    ret |= write_reg(sensor->slv_addr, 0xd3, 0x48);  // AEC target (낮추면 어두워짐)
+    ret |= write_reg(sensor->slv_addr, 0x03, 0x00);  // 노출 high
+    ret |= write_reg(sensor->slv_addr, 0x04, 0x80);  // 노출 low (낮추면 어두워짐)
+
+    ret = write_reg(sensor->slv_addr, 0x43, 0x40); //set o_pclk_output enable
+    ret |= write_reg(sensor->slv_addr, 0x44, 0xE2); //output mode, E1 = 1110 0001
+
+    //ret |= write_reg(sensor->slv_addr, 0xff, 0xff);
+    ESP_LOGI(TAG, "Set camera initial registers");
     if (ret == 0) {
         ESP_LOGD(TAG, "Camera defaults loaded");
+        
+        /*
         vTaskDelay(80 / portTICK_PERIOD_MS);
         ret = write_reg(sensor->slv_addr, 0xf0, 0x00);
 		ret |= write_reg(sensor->slv_addr, 0x43, 0x40); //set o_pclk_output enable
 		ret |= write_reg(sensor->slv_addr, 0x44, 0xE1); //output mode, E1 = 1110 0001
-		/*
+		
 		Output mode setting:total data bus width [9:0]
 		[7] reserved
 		[6] output enable, reset value is 0, that
@@ -180,7 +204,7 @@ static int reset(sensor_t *sensor)
 static int set_pixformat(sensor_t *sensor, pixformat_t pixformat)
 {
     int ret = 0;
-
+//return 0;//test
 	/*
 	YUV422 YUYV	0xE2	enable + chroma + YCbYCr
 	RGB565	0x46		enable + RGB565
@@ -225,6 +249,7 @@ static int set_pixformat(sensor_t *sensor, pixformat_t pixformat)
 static int set_framesize(sensor_t *sensor, framesize_t framesize)
 {
     int ret = 0;
+    
     if (framesize > FRAMESIZE_VGA) {
         ESP_LOGW(TAG, "Invalid framesize: %u", framesize);
         framesize = FRAMESIZE_VGA;
@@ -236,7 +261,7 @@ static int set_framesize(sensor_t *sensor, framesize_t framesize)
     uint16_t col_s = (resolution[FRAMESIZE_VGA].width - w) / 2;
     (void)row_s;
     (void)col_s;
-
+return 0;//test;
 #if CONFIG_GC_SENSOR_SUBSAMPLE_MODE
     struct subsample_cfg {
         uint16_t ratio_numerator;
@@ -832,9 +857,11 @@ static int set_gainceiling_dummy(sensor_t *sensor, gainceiling_t val)
 
 int esp32_camera_gc0307_detect(int slv_addr, sensor_id_t *id)
 {
+    ESP_LOGI(TAG, "Detecting GC0307 sensor... %02x", slv_addr);
     if (GC0307_SCCB_ADDR == slv_addr) {
         write_reg(slv_addr, 0xf0, 0x00);
         uint8_t PID = SCCB_Read(slv_addr, 0x00);
+        ESP_LOGI(TAG, "GC0307 PID=0x%x", PID);
         if (GC0307_PID == PID) {
             id->PID = PID;
             return PID;
@@ -849,14 +876,14 @@ int esp32_camera_gc0307_init(sensor_t *sensor)
 {
     sensor->init_status = init_status;
     sensor->reset = reset;
-    sensor->set_pixformat = set_dummy;
-    sensor->set_framesize = set_dummy;
+    sensor->set_pixformat = set_pixformat;
+    sensor->set_framesize = set_framesize;
     sensor->set_contrast = set_dummy;
     sensor->set_brightness = set_dummy;
     sensor->set_saturation = set_dummy;
     sensor->set_sharpness = set_dummy;
     sensor->set_denoise = set_dummy;
-    sensor->set_gainceiling = set_dummy;
+    sensor->set_gainceiling = set_gainceiling_dummy;
     sensor->set_quality = set_dummy;
     sensor->set_colorbar = set_dummy;
     sensor->set_whitebal = set_dummy;
